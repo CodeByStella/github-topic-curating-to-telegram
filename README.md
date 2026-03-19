@@ -21,7 +21,7 @@ Polls a GitHub topic page (sorted as you choose in the URL), finds the first lis
    npm start
    ```
 
-   For development without a separate build step:
+   For development, `npm run dev` runs the app via **nodemon** (restarts when `src/**/*.ts` or `repo-blocklist.json` changes) and **tsx** (no `build` step):
 
    ```bash
    npm run dev
@@ -29,5 +29,6 @@ Polls a GitHub topic page (sorted as you choose in the URL), finds the first lis
 
 ## Notes
 
+- The process does **not** start Telegraf long polling (`getUpdates`). It only calls the Bot API for `getMe` at startup and `sendMessage` when needed—so it avoids hanging on long-lived update connections that some networks block or throttle.
 - GitHub’s HTML is not a stable API; if the topic layout changes, update the parsing logic in `src/githubTopic.ts`.
 - `lastTopFullName` is kept **in memory** only; restarting the process sends one notification for the current effective top again.

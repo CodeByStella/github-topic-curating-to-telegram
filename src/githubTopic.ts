@@ -12,6 +12,7 @@ export async function fetchTopicHtml(topicUrl: string): Promise<string> {
       Accept: "text/html,application/xhtml+xml",
     },
     responseType: "text",
+    timeout: 30_000,
     validateStatus: (s) => s >= 200 && s < 400,
   });
   if (res.status >= 400) {
