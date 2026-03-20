@@ -1,4 +1,5 @@
 # GitHub topic “effective top repo” Telegram notifier
+<img width="440" height="372" alt="image" src="https://github.com/user-attachments/assets/f8e59c34-8402-45cc-910f-6fa32e1ce67d" />
 
 Polls a GitHub topic page (sorted as you choose in the URL), finds the first listed repository that is not in [`repo-blocklist.json`](repo-blocklist.json), and notifies a Telegram user when that **effective** top repo changes—or on first successful poll after startup.
 
