@@ -2,3 +2,6 @@ node_modules/
 dist/
 .env
 *.log
+repo-blocklist.json
+repo-filters.json
+repo-config.json

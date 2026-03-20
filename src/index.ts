@@ -1,6 +1,14 @@
-import { loadBlocklistSet, pickEffectiveTop } from "./blocklist.js";
-import { loadConfig } from "./config.js";
-import { loadFilters, matchesFilters } from "./filters.js";
+import {
+  initBlocklistFile,
+  loadBlocklistSet,
+  pickEffectiveTop,
+} from "./blocklist.js";
+import { registerCallbacks, registerCommands } from "./commands.js";
+import {
+  getMergedConfig,
+  initConfigFile,
+} from "./configManager.js";
+import { initFiltersFile, loadFilters, matchesFilters } from "./filters.js";
 import {
   fetchCommitCount,
   fetchContributorsCount,
@@ -156,11 +164,37 @@ function formatRepoMessage(repo: TopRepo): string {
 }
 
 async function main(): Promise<void> {
-  const config = loadConfig();
+  // Initialize config files if they don't exist
+  console.log("[startup] initializing config files…");
+  initBlocklistFile();
+  initFiltersFile();
+  initConfigFile();
+
+  const config = getMergedConfig();
   console.log(
     `[startup] polling every ${config.fetchingIntervalMs}ms — topic: ${config.githubTopicSlug}${config.githubToken ? " (with token)" : ""}`,
   );
   const telegram = createTelegramBotService(config.telegramBotToken);
+  
+  // Register command and callback handlers
+  const bot = telegram.getBot();
+  registerCommands(bot, config.telegramUserId);
+  registerCallbacks(bot, config.telegramUserId);
+
+  // Set bot commands menu (shows in Telegram menu button)
+  try {
+    await bot.telegram.setMyCommands([
+      { command: "start", description: "Show welcome and command list" },
+      { command: "help", description: "Show detailed help" },
+      { command: "status", description: "Show current configuration" },
+      { command: "blocklist", description: "Manage blocked repositories" },
+      { command: "filters", description: "Manage range filters" },
+      { command: "config", description: "Manage bot configuration" },
+    ]);
+    console.log("[startup] Bot commands menu registered");
+  } catch (err) {
+    console.warn("[startup] Failed to register bot commands menu:", err);
+  }
 
   let lastTopFullName: string | null = null;
   let fetching = false;
@@ -171,12 +205,14 @@ async function main(): Promise<void> {
     }
     fetching = true;
     try {
+      // Reload merged config to pick up runtime changes (topic, etc.)
+      const currentConfig = getMergedConfig();
       console.log("[poll] fetching topic via GitHub API…");
       const blocked = loadBlocklistSet();
       const filters = loadFilters();
       const repos = await fetchTopicRepos(
-        config.githubTopicSlug,
-        config.githubToken,
+        currentConfig.githubTopicSlug,
+        currentConfig.githubToken,
       );
       if (repos.length === 0) {
         console.error("[poll] no repositories returned from GitHub API");
@@ -203,7 +239,7 @@ async function main(): Promise<void> {
           const details = await fetchRepoDetails(
             effective.owner,
             effective.name,
-            config.githubToken,
+            currentConfig.githubToken,
           );
           
           // Assign all basic stats
@@ -232,13 +268,13 @@ async function main(): Promise<void> {
             fetchContributorsCount(
               effective.owner,
               effective.name,
-              config.githubToken,
+              currentConfig.githubToken,
             ),
             fetchCommitCount(
               effective.owner,
               effective.name,
               details.defaultBranch,
-              config.githubToken,
+              currentConfig.githubToken,
             ),
           ]);
           effective.contributorsCount = contributorsCount;
@@ -260,10 +296,29 @@ async function main(): Promise<void> {
           return;
         }
 
+        // Create inline keyboard with Block and Explore buttons
+        const inlineKeyboard = {
+          inline_keyboard: [
+            [
+              {
+                text: "🚫 Block",
+                callback_data: `block:${effective.fullName}`,
+              },
+              {
+                text: "🔗 Explore",
+                url: effective.url,
+              },
+            ],
+          ],
+        };
+
         await telegram.sendMessage(
-          config.telegramUserId,
+          currentConfig.telegramUserId,
           formatRepoMessage(effective),
-          { parse_mode: "HTML" },
+          {
+            parse_mode: "HTML",
+            reply_markup: inlineKeyboard,
+          },
         );
         lastTopFullName = effective.fullName;
         console.log("[poll] sent Telegram notification");
@@ -277,10 +332,10 @@ async function main(): Promise<void> {
     }
   };
 
-  console.log("[startup] verifying Telegram bot token (single getMe, no long polling)…");
+  console.log("[startup] verifying Telegram bot token…");
   try {
     const { username } = await telegram.getMe();
-    console.log(`[startup] Telegram OK — bot @${username}; Ctrl+C to stop`);
+    console.log(`[startup] Telegram OK — bot @${username}`);
   } catch (err) {
     console.error(
       "[startup] Telegram getMe failed (check token, firewall, or api.telegram.org reachability):",
@@ -288,22 +343,59 @@ async function main(): Promise<void> {
     );
     process.exit(1);
   }
-  await poll();
-  const timer = setInterval(() => {
-    void poll();
-  }, config.fetchingIntervalMs);
 
-  const shutdown = (signal: string): void => {
-    clearInterval(timer);
+  // Launch bot with long polling to receive commands and callbacks
+  console.log("[startup] launching bot (long polling enabled for commands)…");
+  
+  // Launch bot in background - don't block on it
+  telegram.launch().then(() => {
+    console.log("[startup] bot long polling started; commands enabled");
+  }).catch((err) => {
+    console.error("[startup] bot launch failed (commands may not work):", err);
+    console.error("[startup] continuing with notifications only...");
+  });
+
+  // Start poll loop immediately (don't wait for bot.launch)
+  await poll();
+  
+  // Use recursive setTimeout instead of setInterval for dynamic interval support
+  let pollTimeout: NodeJS.Timeout | null = null;
+  let isShuttingDown = false;
+
+  const scheduleNextPoll = (): void => {
+    if (isShuttingDown) return;
+    const currentConfig = getMergedConfig();
+    pollTimeout = setTimeout(() => {
+      void poll().finally(() => {
+        scheduleNextPoll(); // Schedule next poll after current one completes
+      });
+    }, currentConfig.fetchingIntervalMs);
+  };
+
+  scheduleNextPoll(); // Start the polling cycle
+  
+  console.log("[startup] bot is running; Ctrl+C to stop");
+
+  const shutdown = async (signal: string): Promise<void> => {
+    isShuttingDown = true;
+    if (pollTimeout) {
+      clearTimeout(pollTimeout);
+    }
     console.log(`[shutdown] ${signal}`);
+    try {
+      const botInstance = telegram.getBot();
+      await botInstance.stop(signal);
+    } catch {
+      // Ignore stop errors
+    }
     process.exit(0);
   };
 
   process.once("SIGINT", () => {
-    shutdown("SIGINT");
+    void shutdown("SIGINT");
   });
   process.once("SIGTERM", () => {
-    shutdown("SIGTERM");
+    void shutdown("SIGTERM");
   });
 }
 

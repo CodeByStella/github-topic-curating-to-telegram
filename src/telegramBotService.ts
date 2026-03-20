@@ -1,13 +1,13 @@
 import { Telegraf } from "telegraf";
+import type { InlineKeyboardMarkup } from "telegraf/types";
 
 const sendOpts = {
   link_preview_options: { is_disabled: true },
 } as const;
 
 /**
- * Outbound-only Telegram helper. We intentionally do **not** call `Telegraf.launch()`:
- * launch starts long-polling (`getUpdates`), which can hang indefinitely behind some
- * networks/firewalls even though `sendMessage` / `getMe` work fine via short HTTP calls.
+ * Enhanced Telegram bot service with command and callback support.
+ * Now uses long polling to receive updates for interactive management.
  */
 export type TelegramBotService = {
   /** One-shot Bot API call to confirm the token and log the bot identity at startup. */
@@ -15,8 +15,13 @@ export type TelegramBotService = {
   sendMessage: (
     chatId: string,
     text: string,
-    options?: { parse_mode?: "HTML" | "Markdown" },
+    options?: {
+      parse_mode?: "HTML" | "Markdown";
+      reply_markup?: InlineKeyboardMarkup;
+    },
   ) => Promise<void>;
+  launch: () => Promise<void>;
+  getBot: () => Telegraf;
 };
 
 export function createTelegramBotService(token: string): TelegramBotService {
@@ -32,5 +37,9 @@ export function createTelegramBotService(token: string): TelegramBotService {
         ...options,
       });
     },
+    launch: async () => {
+      await bot.launch();
+    },
+    getBot: () => bot,
   };
 }

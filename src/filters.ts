@@ -1,8 +1,23 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { TopRepo } from "./types.js";
 
 const FILTERS_FILENAME = "repo-filters.json";
+
+/**
+ * Initializes filters file with empty object if it doesn't exist.
+ */
+export function initFiltersFile(projectRoot: string = process.cwd()): void {
+  const filePath = path.join(projectRoot, FILTERS_FILENAME);
+  if (!existsSync(filePath)) {
+    try {
+      writeFileSync(filePath, "{}\n", "utf8");
+      console.log(`[init] Created ${FILTERS_FILENAME}`);
+    } catch (err) {
+      console.error(`[init] Failed to create ${FILTERS_FILENAME}:`, err);
+    }
+  }
+}
 
 export type RangeFilter = {
   min?: number | null;
@@ -73,4 +88,67 @@ export function matchesFilters(repo: TopRepo, filters: RepoFilters): boolean {
     return false;
   }
   return true;
+}
+
+/**
+ * Saves filters to repo-filters.json.
+ */
+export function saveFilters(
+  filters: RepoFilters,
+  projectRoot: string = process.cwd(),
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      const filePath = path.join(projectRoot, FILTERS_FILENAME);
+      writeFileSync(
+        filePath,
+        JSON.stringify(filters, null, 2) + "\n",
+        "utf8",
+      );
+      resolve();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/**
+ * Updates a single filter field.
+ */
+export function updateFilter(
+  field: keyof RepoFilters,
+  filter: RangeFilter,
+  projectRoot: string = process.cwd(),
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      const current = loadFilters(projectRoot);
+      current[field] = filter;
+      saveFilters(current, projectRoot)
+        .then(() => resolve())
+        .catch(reject);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/**
+ * Clears a specific filter field.
+ */
+export function clearFilter(
+  field: keyof RepoFilters,
+  projectRoot: string = process.cwd(),
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      const current = loadFilters(projectRoot);
+      delete current[field];
+      saveFilters(current, projectRoot)
+        .then(() => resolve())
+        .catch(reject);
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
