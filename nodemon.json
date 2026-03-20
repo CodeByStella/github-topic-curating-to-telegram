@@ -1,5 +1,5 @@
 {
-  "watch": ["src", "repo-blocklist.json"],
+  "watch": ["src", "repo-blocklist.json", "repo-filters.json"],
   "ext": "ts,json",
   "exec": "node --import tsx src/index.ts"
 }

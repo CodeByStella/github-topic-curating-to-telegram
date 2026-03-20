@@ -12,7 +12,11 @@ const sendOpts = {
 export type TelegramBotService = {
   /** One-shot Bot API call to confirm the token and log the bot identity at startup. */
   getMe: () => Promise<{ username: string }>;
-  sendMessage: (chatId: string, text: string) => Promise<void>;
+  sendMessage: (
+    chatId: string,
+    text: string,
+    options?: { parse_mode?: "HTML" | "Markdown" },
+  ) => Promise<void>;
 };
 
 export function createTelegramBotService(token: string): TelegramBotService {
@@ -22,8 +26,11 @@ export function createTelegramBotService(token: string): TelegramBotService {
       const me = await bot.telegram.getMe();
       return { username: me.username };
     },
-    sendMessage: async (chatId, text) => {
-      await bot.telegram.sendMessage(chatId, text, sendOpts);
+    sendMessage: async (chatId, text, options) => {
+      await bot.telegram.sendMessage(chatId, text, {
+        ...sendOpts,
+        ...options,
+      });
     },
   };
 }
