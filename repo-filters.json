@@ -1,5 +1,5 @@
 {
-  "stars": { "min": 10, "max": 500 },
+  "stars": { "min": 0, "max": 500 },
   "forks": { "min": 0, "max": null },
   "subscribers": { "min": 0, "max": null },
   "openIssues": { "min": 0, "max": null },

@@ -51,89 +51,105 @@ function formatRepoMessage(repo: TopRepo): string {
   if (repo.private) badges.push("🔒 Private");
   else if (repo.visibility) badges.push(`👁️ ${repo.visibility}`);
   
-  const header = `🔥 <b>${repo.owner}/${repo.name}</b>${badges.length > 0 ? ` ${badges.join(" ")}` : ""}`;
+  // Enhanced repo name formatting with better visual separation - name is clickable
+  const ownerPart = `<b>${repo.owner}</b>`;
+  const namePart = `<b>${repo.name}</b>`;
+  const repoName = `${ownerPart}<code>/</code>${namePart}`;
+  const clickableRepoName = `<a href="${repo.url}">${repoName}</a>`;
+  const header = `🔥 ${clickableRepoName}${badges.length > 0 ? `  ${badges.join(" ")}` : ""}`;
   lines.push(header);
-  lines.push(`🔗 ${repo.url}`);
 
   if (repo.description) {
     lines.push("", `📝 ${repo.description}`);
   }
 
-  // Main stats
-  const stats: string[] = [];
+  // Engagement stats (grouped together)
+  const engagement: string[] = [];
   if (repo.stars !== undefined) {
-    stats.push(`⭐ ${formatNumber(repo.stars)}`);
+    engagement.push(`⭐ <b>${formatNumber(repo.stars)}</b> stars`);
   }
   if (repo.forks !== undefined) {
-    stats.push(`🍴 ${formatNumber(repo.forks)}`);
-  }
-  if (repo.networkCount !== undefined && repo.networkCount > repo.forks!) {
-    stats.push(`🌐 ${formatNumber(repo.networkCount)} network`);
+    engagement.push(`🍴 <b>${formatNumber(repo.forks)}</b> forks`);
   }
   if (repo.subscribers !== undefined && repo.subscribers > 0) {
-    stats.push(`👀 ${formatNumber(repo.subscribers)}`);
+    engagement.push(`👀 <b>${formatNumber(repo.subscribers)}</b> watchers`);
   }
+  if (engagement.length > 0) {
+    lines.push("", engagement.join("  •  "));
+  }
+
+  // Activity stats (grouped together)
+  const activity: string[] = [];
   if (repo.commitCount !== undefined && repo.commitCount > 0) {
-    stats.push(`📝 ${formatNumber(repo.commitCount)} commits`);
-  }
-  if (repo.openIssues !== undefined) {
-    stats.push(`🐛 ${formatNumber(repo.openIssues)}`);
+    activity.push(`📝 <b>${formatNumber(repo.commitCount)}</b> commits`);
   }
   if (repo.contributorsCount !== undefined && repo.contributorsCount > 0) {
-    stats.push(`👥 ${repo.contributorsCount}+`);
+    activity.push(`👥 <b>${repo.contributorsCount}+</b> contributors`);
+  }
+  if (repo.openIssues !== undefined) {
+    activity.push(`🐛 <b>${formatNumber(repo.openIssues)}</b> open issues`);
+  }
+  if (activity.length > 0) {
+    lines.push("", activity.join("  •  "));
   }
 
-  if (stats.length > 0) {
-    lines.push("", stats.join(" • "));
-  }
-
-  // Repository details
-  const details: string[] = [];
+  // Repository metadata (single line, less emphasis)
+  const metadata: string[] = [];
   if (repo.language) {
-    details.push(`💻 ${repo.language}`);
+    metadata.push(`💻 ${repo.language}`);
   }
   if (repo.size !== undefined && repo.size > 0) {
-    details.push(`📦 ${formatSize(repo.size)}`);
+    metadata.push(`📦 ${formatSize(repo.size)}`);
   }
   if (repo.license) {
-    details.push(`📄 ${repo.license}`);
+    metadata.push(`📄 ${repo.license}`);
   }
-  if (details.length > 0) {
-    lines.push("", details.join(" • "));
-  }
-
-  // Dates
-  const dates: string[] = [];
-  if (repo.createdAt) {
-    dates.push(`📅 Created ${formatDate(repo.createdAt)}`);
-  }
-  if (repo.updatedAtIso) {
-    dates.push(`🕒 Updated ${formatDate(repo.updatedAtIso)}`);
-  }
-  if (repo.pushedAt) {
-    dates.push(`⬆️ Pushed ${formatDate(repo.pushedAt)}`);
-  }
-  if (dates.length > 0) {
-    lines.push("", dates.join(" • "));
+  if (metadata.length > 0) {
+    lines.push("", metadata.join("  •  "));
   }
 
-  // Additional info
-  const extras: string[] = [];
+  // Timeline (one per line for better readability)
+  if (repo.createdAt || repo.updatedAtIso || repo.pushedAt) {
+    lines.push("");
+    if (repo.createdAt) {
+      lines.push(`📅 Created: ${formatDate(repo.createdAt)}`);
+    }
+    if (repo.updatedAtIso) {
+      lines.push(`🕒 Updated: ${formatDate(repo.updatedAtIso)}`);
+    }
+    if (repo.pushedAt) {
+      lines.push(`⬆️ Pushed: ${formatDate(repo.pushedAt)}`);
+    }
+  }
+
+  // Additional resources (all as clickable links)
+  const resources: string[] = [];
   if (repo.homepage) {
-    extras.push(`🌐 <a href="${repo.homepage}">Homepage</a>`);
+    resources.push(`🌐 <a href="${repo.homepage}">Homepage</a>`);
   }
-  if (repo.hasIssues) extras.push("Issues");
-  if (repo.hasProjects) extras.push("Projects");
-  if (repo.hasWiki) extras.push("Wiki");
-  if (repo.hasPages) extras.push("Pages");
-  if (repo.hasDownloads) extras.push("Downloads");
-  if (extras.length > 0) {
-    lines.push("", `🛠️ ${extras.join(" • ")}`);
+  if (repo.hasIssues) {
+    resources.push(`<a href="${repo.url}/issues">Issues</a>`);
+  }
+  if (repo.hasProjects) {
+    resources.push(`<a href="${repo.url}/projects">Projects</a>`);
+  }
+  if (repo.hasWiki) {
+    resources.push(`<a href="${repo.url}/wiki">Wiki</a>`);
+  }
+  if (repo.hasPages) {
+    resources.push(`<a href="${repo.url}/settings/pages">Pages</a>`);
+  }
+  if (repo.hasDownloads) {
+    resources.push(`<a href="${repo.url}/releases">Downloads</a>`);
+  }
+  if (resources.length > 0) {
+    lines.push("", `🛠️ ${resources.join(" • ")}`);
   }
 
-  // Topics
+  // Topics (formatted for easy copying)
   if (repo.topics.length > 0) {
-    lines.push("", `🏷️ ${repo.topics.slice(0, 8).join(" • ")}`);
+    const topicsList = repo.topics.slice(0, 8).join(", ");
+    lines.push("", `🏷️ Topics:`, `<code>${topicsList}</code>`);
   }
 
   return lines.join("\n");
