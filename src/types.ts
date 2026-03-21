@@ -15,6 +15,7 @@ export type TopRepo = {
   subscribers?: number;
   openIssues?: number;
   contributorsCount?: number;
+  contributors?: Array<{ login: string; contributions: number; html_url: string }>;
   commitCount?: number;
   createdAt?: string | null;
   pushedAt?: string | null;

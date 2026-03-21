@@ -241,6 +241,12 @@ export async function fetchCommitCount(
   }
 }
 
+interface ContributorItem {
+  login: string;
+  contributions: number;
+  html_url: string;
+}
+
 /**
  * Fetches contributor count for a repository.
  * Returns the number of contributors by parsing pagination Link header.
@@ -289,5 +295,53 @@ export async function fetchContributorsCount(
     return Array.isArray(res.data) ? res.data.length : 0;
   } catch {
     return 0; // Fail silently, contributors count is optional
+  }
+}
+
+/**
+ * Fetches the list of contributors for a repository.
+ * Returns up to 30 contributors (first page) sorted by contributions (descending).
+ */
+export async function fetchContributors(
+  owner: string,
+  repo: string,
+  token?: string,
+): Promise<Array<{ login: string; contributions: number; html_url: string }>> {
+  const url = `${REPO_API_BASE}/${owner}/${repo}/contributors`;
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "github-topic-curating-to-telegram",
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  try {
+    const res = await axios.get<ContributorItem[]>(url, {
+      headers,
+      timeout: TIMEOUT_MS,
+      params: { per_page: 30, page: 1 },
+      validateStatus: (s) => s === 200 || s === 403 || s === 404,
+    });
+
+    if (res.status === 403 || res.status === 404) {
+      return [];
+    }
+    if (res.status !== 200) {
+      return [];
+    }
+
+    if (!Array.isArray(res.data)) {
+      return [];
+    }
+
+    // Map to simplified format
+    return res.data.map((item) => ({
+      login: item.login,
+      contributions: item.contributions,
+      html_url: item.html_url,
+    }));
+  } catch {
+    return []; // Fail silently, contributors list is optional
   }
 }

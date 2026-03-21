@@ -11,6 +11,7 @@ import {
 import { initFiltersFile, loadFilters, matchesFilters } from "./filters.js";
 import {
   fetchCommitCount,
+  fetchContributors,
   fetchContributorsCount,
   fetchRepoDetails,
   fetchTopicRepos,
@@ -99,6 +100,19 @@ function formatRepoMessage(repo: TopRepo): string {
   }
   if (activity.length > 0) {
     lines.push("", activity.join("  •  "));
+  }
+
+  // Contributors list (if available)
+  if (repo.contributors && repo.contributors.length > 0) {
+    lines.push("");
+    const contributorLinks = repo.contributors
+      .slice(0, 20) // Limit to top 20 to avoid message length issues
+      .map((c) => `<a href="${c.html_url}">${c.login}</a> (${formatNumber(c.contributions)})`)
+      .join(", ");
+    const moreText = repo.contributors.length > 20
+      ? `, <i>+${repo.contributors.length - 20} more</i>`
+      : "";
+    lines.push(`👥 <b>Contributors:</b> ${contributorLinks}${moreText}`);
   }
 
   // Repository metadata (single line, less emphasis)
@@ -263,8 +277,13 @@ async function main(): Promise<void> {
           effective.hasPages = details.hasPages;
           effective.hasDownloads = details.hasDownloads;
 
-          // Fetch contributors and commit count in parallel
-          const [contributorsCount, commitCount] = await Promise.all([
+          // Fetch contributors list, count, and commit count in parallel
+          const [contributors, contributorsCount, commitCount] = await Promise.all([
+            fetchContributors(
+              effective.owner,
+              effective.name,
+              currentConfig.githubToken,
+            ),
             fetchContributorsCount(
               effective.owner,
               effective.name,
@@ -277,6 +296,7 @@ async function main(): Promise<void> {
               currentConfig.githubToken,
             ),
           ]);
+          effective.contributors = contributors;
           effective.contributorsCount = contributorsCount;
           effective.commitCount = commitCount;
         } catch (err) {
